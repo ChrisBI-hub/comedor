@@ -15,6 +15,8 @@ from datetime import datetime
 
 from pyzk2 import ZK
 
+from impresora_tickets import imprimir_ticket
+
 # ── Configuración ────────────────────────────────────────────────────────
 IP = "10.10.10.126"       # ⚠️ CONFIRMAR: verificar si es .124 o .126
 PORT = 4370
@@ -42,6 +44,26 @@ def asegurar_encabezado_csv():
             writer.writerow(["fecha_hora", "user_id", "nombre", "status", "punch"])
 
 
+def ya_checo_hoy(user_id, fecha):
+    """True si user_id ya tiene un registro guardado con esa fecha (YYYY-MM-DD).
+
+    Se usa para no dar servicio de comedor dos veces el mismo día a la
+    misma persona: se revisa el CSV ANTES de agregar la marcación actual.
+    """
+    if not os.path.exists(ARCHIVO_LOG):
+        return False
+    with open(ARCHIVO_LOG, newline="", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        next(reader, None)  # saltar encabezado
+        for fila in reader:
+            if len(fila) < 2:
+                continue
+            fecha_hora_fila, user_id_fila = fila[0], fila[1]
+            if user_id_fila == str(user_id) and fecha_hora_fila.startswith(fecha):
+                return True
+    return False
+
+
 def escuchar_eventos():
     zk = ZK(IP, port=PORT, timeout=30, password=PASSWORD, force_udp=False)
     conn = None
@@ -60,14 +82,23 @@ def escuchar_eventos():
                 continue
 
             hora = evento.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            fecha = evento.timestamp.strftime("%Y-%m-%d")
             nombre = usuarios.get(evento.user_id, "Desconocido")
 
+            duplicado = ya_checo_hoy(evento.user_id, fecha)
+            etiqueta = "⚠️  YA REGISTRADO HOY" if duplicado else "🍽️  SERVICIO DE COMEDOR"
+
             print(f"🟢 {hora}  |  {evento.user_id} - {nombre}  "
-                  f"(status={evento.status}, punch={evento.punch})")
+                  f"(status={evento.status}, punch={evento.punch})  {etiqueta}")
 
             with open(ARCHIVO_LOG, "a", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 writer.writerow([hora, evento.user_id, nombre, evento.status, evento.punch])
+
+            try:
+                imprimir_ticket(nombre, ya_registrado_hoy=duplicado, fecha_hora=evento.timestamp)
+            except Exception as e:
+                print(f"❌ No se pudo imprimir el ticket: {e}")
 
     except KeyboardInterrupt:
         print("\n⏹️  Captura detenida manualmente.")
