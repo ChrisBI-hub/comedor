@@ -26,6 +26,11 @@ EMPRESA = "ABSOLUTE BROKERAGE CUSTOMS"
 # cambiar a 48.
 ANCHO_TICKET = 32
 
+# Líneas en blanco que se avanzan antes de cortar el papel, para que la
+# guillotina no corte pegado al texto. Subir este número si sigue
+# quedando muy justo.
+ESPACIO_ANTES_DE_CORTE = 6
+
 # ── Comandos ESC/POS ─────────────────────────────────────────────────────
 ESC = b"\x1b"
 GS = b"\x1d"
@@ -88,7 +93,7 @@ def construir_ticket(nombre, ya_registrado_hoy, fecha_hora=None):
     ticket += separador
     ticket += (f"{fecha_str}   {hora_str}\n").encode("ascii")
 
-    ticket += b"\n\n\n"
+    ticket += b"\n" * ESPACIO_ANTES_DE_CORTE
     ticket += CORTE_PAPEL
     return bytes(ticket)
 
