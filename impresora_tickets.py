@@ -15,16 +15,21 @@ import unicodedata
 from datetime import datetime
 
 # ── Configuración ────────────────────────────────────────────────────────
-IP_IMPRESORA = "10.10.10.128"
+IP_IMPRESORA = "10.10.13.190"
 PUERTO_IMPRESORA = 9100
 TIMEOUT_SEGUNDOS = 5
 
-EMPRESA = "ABSOLUTE BROKERAGE CUSTOMS"
+EMPRESA_POR_DEFECTO = "ABSOLUTE BROKERAGE CUSTOMS"
 
 # Ancho del ticket en caracteres (fuente normal). 32 = rollo de 58mm
 # (el más común para este tipo de impresora). Si el rollo es de 80mm,
 # cambiar a 48.
 ANCHO_TICKET = 32
+
+# Líneas en blanco que se avanzan antes de cortar el papel, para que la
+# guillotina no corte pegado al texto. Subir este número si sigue
+# quedando muy justo.
+ESPACIO_ANTES_DE_CORTE = 6
 
 # ── Comandos ESC/POS ─────────────────────────────────────────────────────
 ESC = b"\x1b"
@@ -36,7 +41,7 @@ NEGRITA_ON = ESC + b"E" + b"\x01"
 NEGRITA_OFF = ESC + b"E" + b"\x00"
 TAMANO_NORMAL = GS + b"!" + b"\x00"
 TAMANO_DOBLE = GS + b"!" + b"\x11"   # doble alto + doble ancho
-CORTE_PAPEL = GS + b"V" + b"\x00"    # corte total
+CORTE_PAPEL = ESC + b"i"             # corte de papel (confirmado con esta impresora)
 
 
 def _limpiar_texto(texto):
@@ -46,18 +51,21 @@ def _limpiar_texto(texto):
     return normalizado.encode("ascii", "ignore").decode("ascii")
 
 
-def construir_ticket(nombre, ya_registrado_hoy, fecha_hora=None):
+def construir_ticket(nombre, ya_registrado_hoy, fecha_hora=None, empresa=None):
     """Arma los bytes ESC/POS del ticket de comedor.
 
     nombre: nombre del empleado que checó.
     ya_registrado_hoy: True si el empleado ya tiene una marcación previa
         el mismo día (en ese caso NO se le da servicio de comedor otra vez).
     fecha_hora: datetime del evento; si no se manda, usa el momento actual.
+    empresa: empresa a la que pertenece el empleado (para grupos con varias
+        razones sociales). Si no se manda o viene vacía, usa EMPRESA_POR_DEFECTO.
     """
     if fecha_hora is None:
         fecha_hora = datetime.now()
 
     nombre = _limpiar_texto(nombre.strip().upper())
+    empresa = _limpiar_texto((empresa or EMPRESA_POR_DEFECTO).strip().upper())
     separador = ("-" * ANCHO_TICKET + "\n").encode("ascii")
     fecha_str = fecha_hora.strftime("%d/%m/%Y")
     hora_str = fecha_hora.strftime("%H:%M:%S")
@@ -67,7 +75,7 @@ def construir_ticket(nombre, ya_registrado_hoy, fecha_hora=None):
     ticket += ALINEAR_CENTRO
 
     ticket += NEGRITA_ON
-    ticket += (EMPRESA + "\n").encode("ascii")
+    ticket += (empresa + "\n").encode("ascii")
     ticket += NEGRITA_OFF
     ticket += separador
 
@@ -88,12 +96,12 @@ def construir_ticket(nombre, ya_registrado_hoy, fecha_hora=None):
     ticket += separador
     ticket += (f"{fecha_str}   {hora_str}\n").encode("ascii")
 
-    ticket += b"\n\n\n"
+    ticket += b"\n" * ESPACIO_ANTES_DE_CORTE
     ticket += CORTE_PAPEL
     return bytes(ticket)
 
 
-def imprimir_ticket(nombre, ya_registrado_hoy, fecha_hora=None):
+def imprimir_ticket(nombre, ya_registrado_hoy, fecha_hora=None, empresa=None):
     """Envía el ticket a la impresora de red.
 
     Lanza la excepción tal cual si falla la conexión/envío (impresora
@@ -101,7 +109,7 @@ def imprimir_ticket(nombre, ya_registrado_hoy, fecha_hora=None):
     cómo manejarlo (por ejemplo, solo loguear el error sin tumbar el
     programa que sigue escuchando el checador).
     """
-    ticket = construir_ticket(nombre, ya_registrado_hoy, fecha_hora)
+    ticket = construir_ticket(nombre, ya_registrado_hoy, fecha_hora, empresa)
     with socket.create_connection(
         (IP_IMPRESORA, PUERTO_IMPRESORA), timeout=TIMEOUT_SEGUNDOS
     ) as sock:
@@ -111,7 +119,7 @@ def imprimir_ticket(nombre, ya_registrado_hoy, fecha_hora=None):
 if __name__ == "__main__":
     # Prueba manual: corre este archivo directo para imprimir dos tickets
     # de ejemplo (uno normal y uno de "ya registrado") y confirmar que la
-    # impresora en 10.10.10.128 responde bien.
+    # impresora responde bien.
     print(f"Enviando ticket de prueba a {IP_IMPRESORA}:{PUERTO_IMPRESORA}...")
     imprimir_ticket("Empleado De Prueba", ya_registrado_hoy=False)
     print("✅ Ticket normal enviado.")

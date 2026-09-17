@@ -22,6 +22,7 @@ IP = "10.10.10.126"       # ⚠️ CONFIRMAR: verificar si es .124 o .126
 PORT = 4370
 PASSWORD = 0               # el K40 no pidió clave de comunicación
 ARCHIVO_LOG = "registros_comedor.csv"
+ARCHIVO_EMPRESAS = "empresas_empleados.csv"
 REINTENTO_SEGUNDOS = 10     # espera antes de reintentar si se pierde la conexión
 
 
@@ -34,6 +35,26 @@ def cargar_usuarios(conn):
     except Exception as e:
         print(f"⚠️  No se pudo cargar la lista de usuarios: {e}")
     return usuarios
+
+
+def cargar_empresas():
+    """Devuelve {user_id: empresa} a partir de empresas_empleados.csv.
+
+    Ese CSV se genera cruzando los usuarios del checador con el listado de
+    colaboradores (columna "Empresa"); las filas cuya coincidencia no fue
+    confiable se dejan con la empresa en blanco para revisión manual, y
+    aquí simplemente se ignoran (se usa el valor por defecto del ticket).
+    """
+    empresas = {}
+    if not os.path.exists(ARCHIVO_EMPRESAS):
+        print(f"⚠️  No se encontró {ARCHIVO_EMPRESAS}; los tickets usarán la empresa por defecto.")
+        return empresas
+    with open(ARCHIVO_EMPRESAS, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for fila in reader:
+            if fila.get("user_id") and fila.get("empresa"):
+                empresas[fila["user_id"]] = fila["empresa"]
+    return empresas
 
 
 def asegurar_encabezado_csv():
@@ -73,7 +94,9 @@ def escuchar_eventos():
         print("✅ Conexión establecida\n")
 
         usuarios = cargar_usuarios(conn)
+        empresas = cargar_empresas()
         print(f"👥 Usuarios cargados: {len(usuarios)}")
+        print(f"🏢 Empresas mapeadas: {len(empresas)}")
         print("🍽️  Esperando marcaciones del comedor (Ctrl+C para salir)...\n")
 
         for evento in conn.live_capture():
@@ -86,6 +109,7 @@ def escuchar_eventos():
             nombre = usuarios.get(evento.user_id, "Desconocido")
 
             duplicado = ya_checo_hoy(evento.user_id, fecha)
+            empresa = empresas.get(str(evento.user_id))
             etiqueta = "⚠️  YA REGISTRADO HOY" if duplicado else "🍽️  SERVICIO DE COMEDOR"
 
             print(f"🟢 {hora}  |  {evento.user_id} - {nombre}  "
@@ -96,7 +120,12 @@ def escuchar_eventos():
                 writer.writerow([hora, evento.user_id, nombre, evento.status, evento.punch])
 
             try:
-                imprimir_ticket(nombre, ya_registrado_hoy=duplicado, fecha_hora=evento.timestamp)
+                imprimir_ticket(
+                    nombre,
+                    ya_registrado_hoy=duplicado,
+                    fecha_hora=evento.timestamp,
+                    empresa=empresa,
+                )
             except Exception as e:
                 print(f"❌ No se pudo imprimir el ticket: {e}")
 
