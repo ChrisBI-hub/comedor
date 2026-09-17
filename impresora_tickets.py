@@ -15,7 +15,7 @@ import unicodedata
 from datetime import datetime
 
 # ── Configuración ────────────────────────────────────────────────────────
-IP_IMPRESORA = "10.10.10.128"
+IP_IMPRESORA = "10.10.13.190"
 PUERTO_IMPRESORA = 9100
 TIMEOUT_SEGUNDOS = 5
 
@@ -36,7 +36,7 @@ NEGRITA_ON = ESC + b"E" + b"\x01"
 NEGRITA_OFF = ESC + b"E" + b"\x00"
 TAMANO_NORMAL = GS + b"!" + b"\x00"
 TAMANO_DOBLE = GS + b"!" + b"\x11"   # doble alto + doble ancho
-CORTE_PAPEL = GS + b"V" + b"\x00"    # corte total
+CORTE_PAPEL = ESC + b"i"             # corte de papel (confirmado con esta impresora)
 
 
 def _limpiar_texto(texto):
@@ -111,7 +111,7 @@ def imprimir_ticket(nombre, ya_registrado_hoy, fecha_hora=None):
 if __name__ == "__main__":
     # Prueba manual: corre este archivo directo para imprimir dos tickets
     # de ejemplo (uno normal y uno de "ya registrado") y confirmar que la
-    # impresora en 10.10.10.128 responde bien.
+    # impresora responde bien.
     print(f"Enviando ticket de prueba a {IP_IMPRESORA}:{PUERTO_IMPRESORA}...")
     imprimir_ticket("Empleado De Prueba", ya_registrado_hoy=False)
     print("✅ Ticket normal enviado.")
