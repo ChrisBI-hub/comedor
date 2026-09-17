@@ -19,7 +19,7 @@ IP_IMPRESORA = "10.10.13.190"
 PUERTO_IMPRESORA = 9100
 TIMEOUT_SEGUNDOS = 5
 
-EMPRESA = "ABSOLUTE BROKERAGE CUSTOMS"
+EMPRESA_POR_DEFECTO = "ABSOLUTE BROKERAGE CUSTOMS"
 
 # Ancho del ticket en caracteres (fuente normal). 32 = rollo de 58mm
 # (el más común para este tipo de impresora). Si el rollo es de 80mm,
@@ -51,18 +51,21 @@ def _limpiar_texto(texto):
     return normalizado.encode("ascii", "ignore").decode("ascii")
 
 
-def construir_ticket(nombre, ya_registrado_hoy, fecha_hora=None):
+def construir_ticket(nombre, ya_registrado_hoy, fecha_hora=None, empresa=None):
     """Arma los bytes ESC/POS del ticket de comedor.
 
     nombre: nombre del empleado que checó.
     ya_registrado_hoy: True si el empleado ya tiene una marcación previa
         el mismo día (en ese caso NO se le da servicio de comedor otra vez).
     fecha_hora: datetime del evento; si no se manda, usa el momento actual.
+    empresa: empresa a la que pertenece el empleado (para grupos con varias
+        razones sociales). Si no se manda o viene vacía, usa EMPRESA_POR_DEFECTO.
     """
     if fecha_hora is None:
         fecha_hora = datetime.now()
 
     nombre = _limpiar_texto(nombre.strip().upper())
+    empresa = _limpiar_texto((empresa or EMPRESA_POR_DEFECTO).strip().upper())
     separador = ("-" * ANCHO_TICKET + "\n").encode("ascii")
     fecha_str = fecha_hora.strftime("%d/%m/%Y")
     hora_str = fecha_hora.strftime("%H:%M:%S")
@@ -72,7 +75,7 @@ def construir_ticket(nombre, ya_registrado_hoy, fecha_hora=None):
     ticket += ALINEAR_CENTRO
 
     ticket += NEGRITA_ON
-    ticket += (EMPRESA + "\n").encode("ascii")
+    ticket += (empresa + "\n").encode("ascii")
     ticket += NEGRITA_OFF
     ticket += separador
 
@@ -98,7 +101,7 @@ def construir_ticket(nombre, ya_registrado_hoy, fecha_hora=None):
     return bytes(ticket)
 
 
-def imprimir_ticket(nombre, ya_registrado_hoy, fecha_hora=None):
+def imprimir_ticket(nombre, ya_registrado_hoy, fecha_hora=None, empresa=None):
     """Envía el ticket a la impresora de red.
 
     Lanza la excepción tal cual si falla la conexión/envío (impresora
@@ -106,7 +109,7 @@ def imprimir_ticket(nombre, ya_registrado_hoy, fecha_hora=None):
     cómo manejarlo (por ejemplo, solo loguear el error sin tumbar el
     programa que sigue escuchando el checador).
     """
-    ticket = construir_ticket(nombre, ya_registrado_hoy, fecha_hora)
+    ticket = construir_ticket(nombre, ya_registrado_hoy, fecha_hora, empresa)
     with socket.create_connection(
         (IP_IMPRESORA, PUERTO_IMPRESORA), timeout=TIMEOUT_SEGUNDOS
     ) as sock:
