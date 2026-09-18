@@ -43,6 +43,15 @@ TAMANO_NORMAL = GS + b"!" + b"\x00"
 TAMANO_DOBLE = GS + b"!" + b"\x11"   # doble alto + doble ancho
 CORTE_PAPEL = ESC + b"i"             # corte de papel (confirmado con esta impresora)
 
+# Pulso hacia el puerto de cajón de dinero (DK) de la impresora: ESC p m t1 t2.
+# Es el mecanismo estándar de las impresoras de tickets para "hacer ruido":
+# no tienen bocina propia, pero casi todas traen ese puerto, y ahí es donde
+# normalmente se conecta un chicharra/timbre de 12V para avisos. Si tu
+# impresora tiene una chicharra conectada en ese puerto (como las que se usan
+# para abrir cajón registrador), esto la hace sonar.
+PULSO_ALARMA = ESC + b"p" + bytes([0, 120, 120])
+REPETICIONES_ALARMA = 5
+
 
 def _limpiar_texto(texto):
     """Quita acentos/ñ para evitar símbolos raros: muchas impresoras
@@ -116,12 +125,31 @@ def imprimir_ticket(nombre, ya_registrado_hoy, fecha_hora=None, empresa=None):
         sock.sendall(ticket)
 
 
+def sonar_alarma():
+    """Hace sonar la chicharra conectada al puerto de cajón (DK) de la
+    impresora, sin imprimir nada en papel.
+
+    Requiere que haya una chicharra/timbre de 12V conectado físicamente a
+    ese puerto (el mismo que se usa para abrir cajones de dinero en cajas
+    registradoras); si no hay nada conectado ahí, este comando no hace
+    nada visible. Lanza la excepción tal cual si falla la conexión, igual
+    que imprimir_ticket.
+    """
+    pulsos = PULSO_ALARMA * REPETICIONES_ALARMA
+    with socket.create_connection(
+        (IP_IMPRESORA, PUERTO_IMPRESORA), timeout=TIMEOUT_SEGUNDOS
+    ) as sock:
+        sock.sendall(pulsos)
+
+
 if __name__ == "__main__":
     # Prueba manual: corre este archivo directo para imprimir dos tickets
-    # de ejemplo (uno normal y uno de "ya registrado") y confirmar que la
-    # impresora responde bien.
+    # de ejemplo (uno normal y uno de "ya registrado") y probar la alarma,
+    # y confirmar que la impresora responde bien.
     print(f"Enviando ticket de prueba a {IP_IMPRESORA}:{PUERTO_IMPRESORA}...")
     imprimir_ticket("Empleado De Prueba", ya_registrado_hoy=False)
     print("✅ Ticket normal enviado.")
     imprimir_ticket("Empleado De Prueba", ya_registrado_hoy=True)
     print("✅ Ticket de 'ya registrado' enviado.")
+    sonar_alarma()
+    print("✅ Pulso de alarma enviado (solo se oye si hay una chicharra conectada al puerto DK).")

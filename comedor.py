@@ -15,7 +15,7 @@ from datetime import datetime
 
 from pyzk2 import ZK
 
-from impresora_tickets import imprimir_ticket
+from impresora_tickets import imprimir_ticket, sonar_alarma
 
 # ── Configuración ────────────────────────────────────────────────────────
 IP = "10.10.10.126"       # ⚠️ CONFIRMAR: verificar si es .124 o .126
@@ -133,7 +133,7 @@ def escuchar_eventos():
 
             duplicado = ya_checo_hoy(evento.user_id, fecha)
             empresa = empresas.get(str(evento.user_id))
-            etiqueta = "⚠️  YA REGISTRADO HOY" if duplicado else "🍽️  SERVICIO DE COMEDOR"
+            etiqueta = "⚠️  YA REGISTRADO HOY (sin ticket, solo alarma)" if duplicado else "🍽️  SERVICIO DE COMEDOR"
 
             print(f"🟢 {hora}  |  {evento.user_id} - {nombre}  "
                   f"(status={evento.status}, punch={evento.punch})  {etiqueta}")
@@ -143,14 +143,19 @@ def escuchar_eventos():
                 writer.writerow([hora, evento.user_id, nombre, evento.status, evento.punch])
 
             try:
-                imprimir_ticket(
-                    nombre,
-                    ya_registrado_hoy=duplicado,
-                    fecha_hora=evento.timestamp,
-                    empresa=empresa,
-                )
+                if duplicado:
+                    # Ya checó hoy: no se le da otro ticket, solo se avisa
+                    # con la alarma de la impresora para que no se le sirva.
+                    sonar_alarma()
+                else:
+                    imprimir_ticket(
+                        nombre,
+                        ya_registrado_hoy=False,
+                        fecha_hora=evento.timestamp,
+                        empresa=empresa,
+                    )
             except Exception as e:
-                print(f"❌ No se pudo imprimir el ticket: {e}")
+                print(f"❌ No se pudo imprimir el ticket / sonar la alarma: {e}")
 
     except KeyboardInterrupt:
         print("\n⏹️  Captura detenida manualmente.")
