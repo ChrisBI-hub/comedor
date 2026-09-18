@@ -57,6 +57,26 @@ def cargar_empresas():
     return empresas
 
 
+def cargar_nombres_corregidos():
+    """Devuelve {user_id: nombre_checador} a partir de empresas_empleados.csv.
+
+    El checador guarda los nombres recortados (límite del equipo) y sin
+    acentos/eñes, lo que a veces los deja mal escritos. RRHH puede corregir
+    la columna "nombre_checador" de ese CSV directamente (identificando a
+    la persona por su user_id) y ese nombre corregido se usa de aquí en
+    adelante en los tickets, en vez del que reporta el equipo tal cual.
+    """
+    nombres = {}
+    if not os.path.exists(ARCHIVO_EMPRESAS):
+        return nombres
+    with open(ARCHIVO_EMPRESAS, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for fila in reader:
+            if fila.get("user_id") and fila.get("nombre_checador"):
+                nombres[fila["user_id"]] = fila["nombre_checador"]
+    return nombres
+
+
 def asegurar_encabezado_csv():
     """Crea el CSV con encabezado si todavía no existe."""
     if not os.path.exists(ARCHIVO_LOG):
@@ -95,8 +115,10 @@ def escuchar_eventos():
 
         usuarios = cargar_usuarios(conn)
         empresas = cargar_empresas()
+        nombres_corregidos = cargar_nombres_corregidos()
         print(f"👥 Usuarios cargados: {len(usuarios)}")
         print(f"🏢 Empresas mapeadas: {len(empresas)}")
+        print(f"✏️  Nombres corregidos por RRHH: {len(nombres_corregidos)}")
         print("🍽️  Esperando marcaciones del comedor (Ctrl+C para salir)...\n")
 
         for evento in conn.live_capture():
@@ -106,7 +128,8 @@ def escuchar_eventos():
 
             hora = evento.timestamp.strftime("%Y-%m-%d %H:%M:%S")
             fecha = evento.timestamp.strftime("%Y-%m-%d")
-            nombre = usuarios.get(evento.user_id, "Desconocido")
+            nombre_checador = usuarios.get(evento.user_id, "Desconocido")
+            nombre = nombres_corregidos.get(str(evento.user_id), nombre_checador)
 
             duplicado = ya_checo_hoy(evento.user_id, fecha)
             empresa = empresas.get(str(evento.user_id))
