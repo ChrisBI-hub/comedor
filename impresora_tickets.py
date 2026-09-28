@@ -15,7 +15,7 @@ import unicodedata
 from datetime import datetime
 
 # ── Configuración ────────────────────────────────────────────────────────
-IP_IMPRESORA = "10.10.13.190"
+IP_IMPRESORA = "10.10.10.79"
 PUERTO_IMPRESORA = 9100
 TIMEOUT_SEGUNDOS = 5
 
